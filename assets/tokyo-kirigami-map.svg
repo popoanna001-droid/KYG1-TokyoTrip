@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="500" viewBox="0 0 1000 500" preserveAspectRatio="none">
+  <defs>
+    <pattern id="sea" width="42" height="22" patternUnits="userSpaceOnUse">
+      <path d="M-21 22a21 21 0 0 1 42 0m0 0a21 21 0 0 1 42 0M-15 22a15 15 0 0 1 30 0m12 0a15 15 0 0 1 30 0" fill="none" stroke="#f5fbfb" stroke-opacity=".33"/>
+    </pattern>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="6" stdDeviation="4" flood-color="#316f8a" flood-opacity=".24"/></filter>
+    <path id="land" d="M0 0H1000V328Q978 349 951 373T891 427Q866 461 854 500H535L532 475 554 453 550 429 568 406 556 381 534 367 528 349 505 344 490 320 471 321 459 300 438 298 419 308 407 295 385 310 373 334 350 329 339 356 313 355 300 382 278 388 277 416 298 446 315 474 328 500H0Z"/>
+    <g id="cloud"><path d="M6 21C-4 21-3 9 7 8c4-12 19-10 25 1 9-4 19 3 17 10-1 5-8 6-15 5H10Z" fill="#fffdf4" stroke="#84bac8" stroke-width="2"/><path d="M12 15q8-7 12 2m8-2q5-4 9 0" fill="none" stroke="#9ecbd3" stroke-linecap="round"/></g>
+    <g id="tree"><path d="M0 0c-14 19-12 24 0 24S14 19 0 0Z" fill="#8fa365"/><path d="M0 12v17" stroke="#71654b" stroke-width="2"/></g>
+    <g id="petal"><path d="M0 0Q11-8 15-4 15 5 0 7Z" fill="#df8ca5"/></g>
+    <g id="waves" fill="none" stroke="#448eaa" stroke-width="2" stroke-linecap="round"><path d="M0 0q7 8 14 0 7 8 14 0m-21 10q7 8 14 0 7 8 14 0"/></g>
+    <g id="building" stroke="#7b6159" stroke-width="2"><path d="M0 42V12h12V2h11v40Z" fill="#a4bcc3"/><path d="M6 18h3m-3 9h3m-3 9h3m8-24h3m-3 9h3m-3 9h3m-3 9h3"/></g>
+  </defs>
+  <path fill="#a9d5e1" d="M0 0h1000v500H0z"/>
+  <path fill="url(#sea)" d="M0 0h1000v500H0z"/>
+  <use href="#land" fill="#fff9e9" filter="url(#shadow)"/>
+  <path d="M0 44q144 12 226 2t166 10q94 21 148-2t138 0q110 24 169-3t153-5M391 225q84-32 149-10t114-22q55-45 149-33t197-17" fill="none" stroke="#a8ced6" stroke-width="6"/>
+  <path d="M605 100q23-16 50-3l-8 9-21 5-13 12-13-6 4-10Z" fill="#b6d9df"/>
+  <path d="M1 122Q60 69 113 107t118-4q68-37 115 11M524 281q60-49 134-28t150-27q70-48 167-24M640 388q49-35 115-24t123-42" fill="none" stroke="#dbe3ba" stroke-width="24" stroke-linecap="round" opacity=".65"/>
+  <path d="M52 257q103-58 193-10t151-48q94-68 180-58t248-21" fill="none" stroke="#e0cdb5" stroke-width="5" stroke-dasharray="3 8" stroke-linecap="round"/>
+  <g fill="#b9ca91" opacity=".46"><ellipse cx="724" cy="76" rx="74" ry="17"/><ellipse cx="676" cy="323" rx="73" ry="22"/><ellipse cx="914" cy="277" rx="60" ry="27"/><ellipse cx="86" cy="390" rx="60" ry="24"/></g>
+  <use href="#cloud" x="43" y="24"/><use href="#cloud" x="920" y="24"/><use href="#cloud" x="766" y="423"/>
+  <use href="#tree" x="71" y="122"/><use href="#tree" x="95" y="134"/><use href="#tree" x="637" y="286"/><use href="#tree" x="660" y="275"/><use href="#tree" x="934" y="216"/><use href="#tree" x="957" y="224"/><use href="#tree" x="736" y="57"/>
+  <use href="#waves" x="422" y="424"/><use href="#waves" x="458" y="377"/><use href="#waves" x="942" y="452"/>
+  <use href="#petal" x="571" y="65"/><use href="#petal" x="588" y="54"/><use href="#petal" x="116" y="414"/><use href="#petal" x="135" y="425"/><use href="#petal" x="700" y="392"/>
+  <!-- Tokyo landmarks, from the west-side districts to the Sumida River. -->
+  <g transform="translate(170 73)"><rect x="-18" y="20" width="36" height="7" rx="2" fill="#81a5ad"/><rect x="-13" y="13" width="30" height="7" rx="2" fill="#ca8d7d"/><path d="M-10 12V0l5 3 6-2 7 1 5-4v14q-12 8-23 0Z" fill="#b59166"/><circle cx="-3" cy="7" r="2" fill="#fff7df"/><circle cx="6" cy="7" r="2" fill="#fff7df"/></g>
+  <use href="#building" x="105" y="136"/><use href="#building" x="127" y="121"/>
+  <g transform="translate(114 231)" fill="#d98998" stroke="#aa687b" stroke-width="2"><path d="M0 0q-24-16-24-4t24 4q24-16 24-4T0 0Z"/><path d="m0 0-10 16m10-16 10 16" fill="none" stroke-width="5"/><circle r="4" fill="#f6bfcb"/></g>
+  <g transform="translate(139 306)" stroke="#777580" stroke-width="2"><path d="m-23 8 20-17h16L35 8Z" fill="#aabecb"/><path d="m-15 6 15-13m-6 13 10-13m4 13 1-13m9 13-6-13" stroke="#fffdf4" stroke-width="3"/></g>
+  <g transform="translate(176 391)"><path d="M-6 21 2-9l4 30" fill="#987965"/><circle cx="-9" cy="1" r="11" fill="#e8a0b5"/><circle cx="10" cy="0" r="12" fill="#eab0c1"/><circle cx="0" cy="-9" r="12" fill="#f2c0cf"/></g>
+  <g transform="translate(316 234)" stroke="#87594e" stroke-width="2"><path d="M-33 24V5h13V-4h40V5h13v19Z" fill="#b96755"/><path d="M-20-4 0-20 20-4Z" fill="#656b79"/><path d="M-22 13h5m8 0h5m8 0h5m8 0h5M0 9v15" stroke="#fff1cc" stroke-width="3"/></g>
+  <g transform="translate(328 145)" stroke="#686787" stroke-width="2"><path d="M-8 0h16q11 0 15 11 3 10-6 9l-9-6H-8l-9 6q-9 1-6-9Q-19 0-8 0Z" fill="#b4c1db"/><path d="M-14 8h8m-4-4v8m20-4h1m5 3h1" stroke-linecap="round"/></g>
+  <g transform="translate(395 105)" fill="none" stroke="#b14d46" stroke-width="5" stroke-linecap="round"><path d="M-23 0Q0 5 23 0M-20 9h40M-12 3v23M12 3v23"/><path d="M0 6v7" stroke-width="3"/></g>
+  <!-- Narita sits on continuous inland Chiba terrain. -->
+  <g transform="translate(826 113)"><path d="m-36 20 72-39" stroke="#93a6ac" stroke-width="14" stroke-linecap="round"/><path d="m-36 20 72-39" stroke="#fff8e7" stroke-width="2" stroke-dasharray="7 5"/><path d="m-30-12 20 3 16-14 5 1-8 15 20 2q9 2 3 6L4 3l7 15-5 1L-9 5l-15 3-6-4 9-6Z" fill="#c9686d" stroke="#fff9e9" stroke-width="2"/></g>
+  <path d="M374 472h43l-8 10h-26Z" fill="#bd6c6c"/><path d="M392 469v-26l-15 26Zm4 0v-20l14 20Z" fill="#fff9e9"/>
+</svg>
+
