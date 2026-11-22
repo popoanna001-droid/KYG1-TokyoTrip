@@ -12,6 +12,7 @@ const savedOutingSections = ['shopping-list', 'clothing-list', 'drugstore-list',
 let collectionDatabase;
 let collectionSaveQueue = Promise.resolve();
 document.body.inert = true;
+document.body.classList.add('records-loading');
 
 function openCollectionDatabase() {
  return new Promise((resolve, reject) => {
@@ -36,6 +37,8 @@ function collectionTransaction(mode, value) {
 function saveCollections() {
  const snapshot = {
     version: 1,
+    preparation: structuredClone(prepTasks),
+    routes: structuredClone(routeSelections),
     trips: structuredClone(data),
     outings: Object.fromEntries(savedOutingSections.map(id => {
         const list = document.querySelector('#' + id + ' > .outing-cards').cloneNode(true);
@@ -45,8 +48,10 @@ function saveCollections() {
  };
  collectionSaveQueue = collectionSaveQueue.then(async () => {
     if (!collectionDatabase) throw new Error('儲存空間無法開啟');
+    setStorageStatus('正在儲存…');
     await collectionTransaction('readwrite', snapshot);
- }).catch(() => toast('儲存失敗，請確認瀏覽器允許網站儲存資料，並保留目前頁面。'));
+    setStorageStatus('已儲存於此裝置');
+ }).catch(() => { setStorageStatus('儲存失敗，請先備份紀錄'); toast('儲存失敗，請先按「備份紀錄」保留資料。'); });
  return collectionSaveQueue;
 }
 
@@ -54,6 +59,16 @@ async function restoreCollections() {
  try {
     collectionDatabase = await openCollectionDatabase();
     const saved = await collectionTransaction('readonly');
+    if (Array.isArray(saved?.preparation) && saved.preparation.every(task=>typeof task?.text==='string')) {
+        prepTasks = saved.preparation;
+        renderPrepTasks();
+        updatePrepProgress(false);
+    }
+    if (saved?.routes && typeof saved.routes==='object') {
+        routeSelections = saved.routes;
+        routePlan.querySelectorAll('[data-route-day]').forEach(day=>renderRouteDay(day.dataset.routeDay));
+        showRouteMap(lastRouteDate);
+    }
     if (saved?.version === 1 && Array.isArray(saved.trips) && saved.trips.length &&
         saved.trips.every(trip => trip && Array.isArray(trip.places))) {
         data = saved.trips;
@@ -83,10 +98,13 @@ async function restoreCollections() {
         });
     }
     refreshOutingFilters();
+    setStorageStatus(saved ? '已還原此裝置的紀錄' : '此裝置尚無卡片備份');
  } catch {
-    toast('無法讀取瀏覽器儲存資料，目前顯示原始清單。');
+    setStorageStatus('讀取失敗，請匯入備份或保留目前頁面');
+    toast('無法讀取儲存紀錄，請先確認瀏覽器的網站儲存設定。');
  } finally {
     document.body.inert = false;
+    document.body.classList.remove('records-loading');
  }
 }
 
@@ -603,7 +621,7 @@ function updatePrepProgress(save, walk = false) {
  document.querySelector('#prep-progress').value=count;
  document.querySelector('#prep-progress-count').textContent=count+' / '+total+'（'+percent+'%）';
  document.querySelector('#prep-progress-note').textContent=percent===100?'準備完成，帶著好心情出發吧！':'出發前要準備的，都在這裡慢慢完成。';
- if(save){try{localStorage.setItem(prepStorageKey,JSON.stringify(prepTasks));}catch{}}
+ if(save){try{localStorage.setItem(prepStorageKey,JSON.stringify(prepTasks));}catch{} saveCollections();}
 }
 const prepList = document.querySelector('#prepare-main .prep-items');
 const prepForm = document.querySelector('.prep-add-form');
@@ -844,6 +862,7 @@ routeDialog.querySelector('[data-route-confirm]').addEventListener('click', () =
     try {
         localStorage.setItem(routeStorageKey, JSON.stringify(routeSelections));
     } catch {}
+    saveCollections();
     routeDialog.close();
 });
 
@@ -921,3 +940,49 @@ showRouteMap(Object.keys(routeSelections).find(day => /^[0-6]$/.test(day) && rou
 
 switchContent('records', false);
 restoreCollections();
+
+
+function setStorageStatus(message) {
+ document.getElementById('storage-status').textContent = message;
+}
+document.getElementById('export-records').addEventListener('click', async () => {
+ await collectionSaveQueue;
+ const snapshot = {
+    version:1,
+    trips:structuredClone(data),
+    outings:Object.fromEntries(savedOutingSections.map(id => [id,document.querySelector('#'+id+' > .outing-cards').innerHTML])),
+    preparation:structuredClone(prepTasks),
+    routes:structuredClone(routeSelections)
+ };
+ const url=URL.createObjectURL(new Blob([JSON.stringify(snapshot)],{type:'application/json'}));
+ const link=document.createElement('a');
+ link.href=url;
+ link.download='東京旅遊紀錄-'+new Date().toISOString().slice(0,10)+'.json';
+ link.click();
+ setTimeout(()=>URL.revokeObjectURL(url),60000);
+});
+document.getElementById('import-records').addEventListener('change', async event => {
+ const file=event.target.files[0];
+ if(!file)return;
+ try{
+    const snapshot=JSON.parse(await file.text());
+    if(snapshot.version!==1 || !Array.isArray(snapshot.trips) || !snapshot.trips.length ||
+       !snapshot.trips.every(trip=>trip && Array.isArray(trip.places)) ||
+       !snapshot.outings || !savedOutingSections.every(id=>typeof snapshot.outings[id]==='string') ||
+       !Array.isArray(snapshot.preparation) || !snapshot.preparation.every(task=>typeof task?.text==='string') ||
+       !snapshot.routes || typeof snapshot.routes!=='object' ||
+       !Object.entries(snapshot.routes).every(([day,areas])=>/^[0-6]$/.test(day)&&Array.isArray(areas)&&areas.every(area=>Object.hasOwn(routeMapPoints,area)))) {
+        throw new Error('格式不正確');
+    }
+    if(!confirm('匯入備份會取代目前的旅行紀錄，要繼續嗎？'))return;
+    await collectionSaveQueue;
+    if(!collectionDatabase)throw new Error('儲存空間無法開啟');
+    await collectionTransaction('readwrite',snapshot);
+    try {
+        localStorage.setItem(prepStorageKey,JSON.stringify(snapshot.preparation));
+        localStorage.setItem(routeStorageKey,JSON.stringify(snapshot.routes));
+    } catch {}
+    location.reload();
+ }catch{toast('匯入失敗，請選擇此網站匯出的紀錄備份檔。');}
+ finally{event.target.value='';}
+});
