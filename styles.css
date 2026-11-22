@@ -742,7 +742,7 @@ main{margin:0 auto;padding:0 34px 50px;max-width:1280px;width:100%}
 .outing-pagination button[aria-current="page"]{background:#f8e5bc;border-color:#b79457;font-weight:700}
 #outings-main .outing-card[hidden]{display:none}
 
-#shopping-list .shopping-type-tape{
+#outings-main .shopping-type-tape{
  align-self:flex-start;
  display:inline-block;
  width:fit-content;
@@ -795,3 +795,5 @@ main{margin:0 auto;padding:0 34px 50px;max-width:1280px;width:100%}
  .is-walking .prep-traveller-leg{animation:none}
 }
 
+
+.outing-custom-hours,.outing-custom-note{display:block;white-space:pre-line;margin-bottom:7px}.outing-custom-photo{width:100px;height:90px;object-fit:cover;border-radius:12px;margin:0 0 10px}

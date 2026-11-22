@@ -7,6 +7,89 @@ const illustrations = {
     '小吃': '<ellipse cx="87" cy="105" rx="51" ry="8" fill="#b5a47c" opacity=".2"/><path d="m45 91 85 8" stroke="#9b7955" stroke-width="4"/><path d="m62 58 3 54m25-64 3 64m24-58 3 58" stroke="#ac8a5a" stroke-width="3"/><circle cx="62" cy="62" r="15" fill="#d9b584"/><circle cx="62" cy="40" r="15" fill="#eee1be"/><circle cx="62" cy="21" r="13" fill="#b7c18e"/><circle cx="90" cy="69" r="15" fill="#d4a77b"/><circle cx="90" cy="44" r="15" fill="#eddfbd"/><circle cx="118" cy="72" r="15" fill="#ddbd8b"/><circle cx="118" cy="47" r="15" fill="#eee3c6"/>'
 };
 // ── 目前畫面狀態 ──
+
+const savedOutingSections = ['shopping-list', 'clothing-list', 'drugstore-list', 'goods-list', 'activity-list'];
+let collectionDatabase;
+let collectionSaveQueue = Promise.resolve();
+document.body.inert = true;
+
+function openCollectionDatabase() {
+ return new Promise((resolve, reject) => {
+    const request = indexedDB.open('kyg1-travel-collections', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('collections');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+ });
+}
+
+function collectionTransaction(mode, value) {
+ return new Promise((resolve, reject) => {
+    const transaction = collectionDatabase.transaction('collections', mode);
+    const store = transaction.objectStore('collections');
+    const request = mode === 'readonly' ? store.get('snapshot') : store.put(value, 'snapshot');
+    transaction.oncomplete = () => resolve(request.result);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+ });
+}
+
+function saveCollections() {
+ const snapshot = {
+    version: 1,
+    trips: structuredClone(data),
+    outings: Object.fromEntries(savedOutingSections.map(id => {
+        const list = document.querySelector('#' + id + ' > .outing-cards').cloneNode(true);
+        list.querySelectorAll('[hidden]').forEach(card => card.removeAttribute('hidden'));
+        return [id, list.innerHTML];
+    }))
+ };
+ collectionSaveQueue = collectionSaveQueue.then(async () => {
+    if (!collectionDatabase) throw new Error('儲存空間無法開啟');
+    await collectionTransaction('readwrite', snapshot);
+ }).catch(() => toast('儲存失敗，請確認瀏覽器允許網站儲存資料，並保留目前頁面。'));
+ return collectionSaveQueue;
+}
+
+async function restoreCollections() {
+ try {
+    collectionDatabase = await openCollectionDatabase();
+    const saved = await collectionTransaction('readonly');
+    if (saved?.version === 1 && Array.isArray(saved.trips) && saved.trips.length &&
+        saved.trips.every(trip => trip && Array.isArray(trip.places))) {
+        data = saved.trips;
+        current = data[0].id;
+        render();
+    }
+    for (const id of savedOutingSections) {
+        const section = document.getElementById(id);
+        if (typeof saved?.outings?.[id] === 'string') {
+            const template = document.createElement('template');
+            template.innerHTML = saved.outings[id];
+            template.content.querySelectorAll('script,iframe,object,embed').forEach(node => node.remove());
+            section.querySelector(':scope > .outing-cards').replaceChildren(template.content);
+        }
+        const filters = section.querySelector(':scope > .outing-region-filter');
+        const known = new Set(Array.from(filters.querySelectorAll('button'), button => button.textContent.trim()));
+        section.querySelectorAll(':scope > .outing-cards .outing-label:not(.type-label)').forEach(label => {
+            const area = label.textContent.trim();
+            if (!area || known.has(area)) return;
+            known.add(area);
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = area;
+            button.setAttribute('aria-pressed', 'false');
+            button.addEventListener('click', () => filterOutingRegion(id, area, button));
+            filters.append(button);
+        });
+    }
+    refreshOutingFilters();
+ } catch {
+    toast('無法讀取瀏覽器儲存資料，目前顯示原始清單。');
+ } finally {
+    document.body.inert = false;
+ }
+}
+
 let current = data[0].id, category = '全部', region = '全部', editing = null, deleting = null;
 let page = 1, lastFilterKey = '';
 let convenience = '';
@@ -108,6 +191,7 @@ function openPlace() {
     document.querySelector('#placeform h2').textContent = '收藏一個好地方';
     document.querySelector('#placeform button.primary').textContent = '加入清單';
     document.querySelector('#placeform').reset();
+    document.querySelector('#pstore').value = ['LAWSON','全家','711'].includes(convenience) ? convenience : '';
     document.querySelector('#hours-groups').innerHTML = '';
     addHoursGroup();
     setTextFields('region-fields', []);
@@ -169,12 +253,13 @@ document.querySelector('#placeform').onsubmit = async (e) => {
     }
     const previous = editing !== null ? targetTrip.places[editing] : null;
     const item = {
-        convenienceItem: previous?.convenienceItem, store: previous?.store,
-        name, photo: photo || (previous?.photo || ''), category: document.querySelector('#pcat').value.trim(), scheduleGroups: schedule, hours: formatHours(schedule), days: [
+        convenienceItem: Boolean(document.querySelector('#pstore').value), store: document.querySelector('#pstore').value,
+        name, photo: photo || (previous?.photo || ''), category: previous?.category || '', scheduleGroups: schedule, hours: formatHours(schedule), days: [
             ...new Set(schedule.flatMap(g => g.days))
         ], addresses: readTextFields('address-fields'), address: readTextFields('address-fields')[0] || '', regions: readTextFields('region-fields'), area: readTextFields('region-fields')[0] || '', note: document.querySelector('#pnote').value.trim(), interested: previous?.interested || false, author: previous?.author || '你', done: previous?.done || false
     };
     const wasEditing = editing !== null;
+    convenience = item.convenienceItem ? item.store : '';
     if (wasEditing)
         targetTrip.places[editing] = item;
     else
@@ -185,7 +270,8 @@ document.querySelector('#placeform').onsubmit = async (e) => {
     document.querySelector('#search').value = '';
     document.querySelector('#place').close();
     render();
-    toast(wasEditing ? '已更新收藏；重新整理後會還原。' : '已加入預覽清單；重新整理後會還原。');
+    saveCollections();
+    toast(wasEditing ? '已更新收藏。' : '已加入收藏。');
 };
 document.querySelector('#tripform').onsubmit = e => {
     e.preventDefault();
@@ -201,7 +287,8 @@ document.querySelector('#tripform').onsubmit = e => {
     });
     document.querySelector('#trip').close();
     select(id);
-    toast('已建立示範旅程；尚未儲存到雲端。');
+    saveCollections();
+    toast('已建立旅程。');
 };
 document.querySelector('#tend').oninput = e => e.target.setCustomValidity('');
 illustrations['咖啡甜點'] = illustrations['咖啡'];
@@ -214,7 +301,7 @@ function editPlace(i) {
     document.querySelector('#placeform h2').textContent = '編輯收藏';
     document.querySelector('#placeform button.primary').textContent = '儲存修改';
     document.querySelector('#pname').value = p.name;
-    document.querySelector('#pcat').value = p.category || '';
+    document.querySelector('#pstore').value = p.convenienceItem ? p.store : '';
     setTextFields('region-fields', placeRegions(p));
     setTextFields('address-fields', placeAddresses(p));
     document.querySelector('#pnote').value = p.note || '';
@@ -242,7 +329,8 @@ function confirmDelete() {
     category = '全部';
     region = '全部';
     render();
-    toast('已刪除收藏；重新整理後會還原。');
+    saveCollections();
+    toast('已刪除收藏。');
 }
 // ── 照片放大 ──
 function zoomPhoto(i) {
@@ -293,7 +381,7 @@ function timeOptions(value) {
             return '<option value="' + t + '"' + (value === t ? ' selected' : '') + '>' + t + '</option>';
         }).join('');
 }
-function addHoursGroup(group = {}) {
+function addHoursGroup(group = {}, container = 'hours-groups') {
     const row = document.createElement('div');
     row.className = 'hours-group';
     row.innerHTML = '<div class="group-top"><span>營業時段</span><button type="button" title="移除此時段" aria-label="移除此時段" onclick="this.closest(&quot;.hours-group&quot;).remove()">×</button></div><div class="day-options">' +
@@ -311,11 +399,11 @@ function addHoursGroup(group = {}) {
     const update = () => row.querySelectorAll('select').forEach(s => s.disabled = all.checked);
     all.onchange = update;
     update();
-    document.querySelector('#hours-groups').appendChild(row);
+    document.getElementById(container).appendChild(row);
 }
-function readHoursGroups() {
+function readHoursGroups(container = 'hours-groups') {
     const result = [];
-    for (const row of document.querySelectorAll('.hours-group')) {
+    for (const row of document.getElementById(container).querySelectorAll('.hours-group')) {
         const days = Array.from(row.querySelectorAll('.day-option input:checked')).map(e => e.value), start = row.querySelector('.group-start').value, end = row.querySelector('.group-end').value, all = row.querySelector('.group-all').checked;
         if (!days.length && !start && !end && !all)
             continue;
@@ -398,7 +486,25 @@ function readTextFields(id) {
     ];
 }
 
-function switchContent(section) {const active=section==='prepare'?'prepare':section==='records'?'records':section===true?'outings':'food';document.querySelector('.journal-top .title > div').textContent={prepare:'準備中',records:'重點筆記',food:'進攻美食世界',outings:'買買買'}[active];const line=document.querySelector('.tokyo-line');line.style.setProperty('--station',{prepare:0,records:1,food:2,outings:3}[active]);const train=line.querySelector('.little-train');train.classList.remove('arriving');void train.offsetWidth;train.classList.add('arriving');for(const name of ['prepare','records','food','outings']){document.querySelector('#'+name+'-main').hidden=name!==active;const tab=document.querySelector('#'+name+'-tab');tab.classList.toggle('active',name===active);tab.setAttribute('aria-current',name===active?'page':'false');}}
+function switchContent(section, animate = true) {
+ const active = section === 'prepare' ? 'prepare' : section === 'records' ? 'records' : section === true ? 'outings' : 'food';
+ const line = document.querySelector('.tokyo-line');
+ const changed = !document.getElementById(active + '-tab').classList.contains('active');
+ document.querySelector('.journal-top .title > div').textContent = {prepare:'準備中',records:'重點筆記',food:'進攻美食世界',outings:'買買買'}[active];
+ const train = line.querySelector('.little-train');
+ train.classList.remove('arriving');
+ line.style.setProperty('--station', {prepare:0,records:1,food:2,outings:3}[active]);
+ if (animate && changed) {
+    void train.offsetWidth;
+    train.classList.add('arriving');
+ }
+ for (const name of ['prepare','records','food','outings']) {
+    document.getElementById(name + '-main').hidden = name !== active;
+    const tab = document.getElementById(name + '-tab');
+    tab.classList.toggle('active', name === active);
+    tab.setAttribute('aria-current', name === active ? 'page' : 'false');
+ }
+}
 
 const outingPageSize = 5;
 const outingPages = new WeakMap();
@@ -473,11 +579,11 @@ function renderOutingPage(section, region, query, requestedPage) {
 
 
 function interestMarkup(index, interested) {return "<button type=\"button\" class=\"interest-button\" aria-label=\"標記有興趣\" title=\"有興趣\" aria-pressed=\"false\" ><svg viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M20.4 4.9a5.2 5.2 0 0 0-7.4 0L12 6l-1-1.1a5.2 5.2 0 0 0-7.4 7.3L12 21l8.4-8.8a5.2 5.2 0 0 0 0-7.3Z\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linejoin=\"round\"/></svg></button>".replace('aria-pressed="false"','aria-pressed="'+Boolean(interested)+'"').replace('class="interest-button"','class="interest-button'+(interested?' is-interested':'')+'"').replace('title="有興趣"','title="'+(interested?'取消有興趣':'有興趣')+'" onclick="toggleFoodInterest('+index+')"');}
-function toggleFoodInterest(index){const p=trip().places[index];p.interested=!p.interested;render();}
-function toggleOutingInterest(button){const active=button.getAttribute('aria-pressed')!=='true';button.setAttribute('aria-pressed',String(active));button.classList.toggle('is-interested',active);button.title=active?'取消有興趣':'有興趣';button.setAttribute('aria-label',button.title);}
+function toggleFoodInterest(index){const p=trip().places[index];p.interested=!p.interested;render();saveCollections();}
+function toggleOutingInterest(button){const active=button.getAttribute('aria-pressed')!=='true';button.setAttribute('aria-pressed',String(active));button.classList.toggle('is-interested',active);button.title=active?'取消有興趣':'有興趣';button.setAttribute('aria-label',button.title);saveCollections();}
 let pendingOutingDelete=null;
 function askDeleteOuting(button){pendingOutingDelete=button.closest('.outing-card');document.querySelector('#delete-outing-name').textContent=pendingOutingDelete.querySelector('h3').textContent;document.querySelector('#delete-outing').showModal();}
-function confirmDeleteOuting(){if(!pendingOutingDelete)return;pendingOutingDelete.remove();pendingOutingDelete=null;document.querySelector('#delete-outing').close();refreshOutingFilters();}
+function confirmDeleteOuting(){if(!pendingOutingDelete)return;pendingOutingDelete.remove();pendingOutingDelete=null;document.querySelector('#delete-outing').close();refreshOutingFilters();saveCollections();}
 
 function updatePrepProgress(save, walk = false) {
  const total = prepTasks.length;
@@ -583,54 +689,116 @@ function refreshOutingFilters() {
 }
 document.querySelector('#outing-search').addEventListener('input', refreshOutingFilters);
 refreshOutingFilters();
-document.querySelector('#outing-form').addEventListener('submit', event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const read = id => form.querySelector('#outing-' + id).value.trim();
-    const sectionId = read('destination');
-    const name = read('name');
-    const region = read('region');
-    if (!name || !region || !['shopping-list', 'activity-list'].includes(sectionId)) return;
+function openOuting() {
+ const form = document.getElementById('outing-form');
+ form.reset();
+ setTextFields('outing-region-fields', ['']);
+ setTextFields('outing-address-fields', ['']);
+ document.getElementById('outing-hours-groups').replaceChildren();
+ addHoursGroup({}, 'outing-hours-groups');
+ document.getElementById('outing-form-dialog').showModal();
+}
+document.querySelector('#outing-form').addEventListener('submit', async event => {
+ event.preventDefault();
+ const form = event.currentTarget;
+ const sectionId = form.querySelector('#outing-destination').value;
+ const name = form.querySelector('#outing-name').value.trim();
+ const regions = readTextFields('outing-region-fields');
+ if (!name || !savedOutingSections.includes(sectionId)) return;
+ if (!regions.length) { toast('請填寫至少一個地區'); return; }
+ const schedule = readHoursGroups('outing-hours-groups');
+ if (schedule === null) return;
+ const file = form.querySelector('#outing-photo').files[0];
+ const submit = form.querySelector('button.primary');
+ submit.disabled = true;
+ try {
+    let photo = '';
+    if (file) {
+        if (!file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
+            toast('請選擇 10 MB 以下的圖片');
+            return;
+        }
+        photo = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
     const section = document.getElementById(sectionId);
-    const category = read('kind') || (sectionId === 'shopping-list' ? '購物' : '活動');
-    const map = read('map');
-    const hours = read('hours');
-    const note = read('note');
     const card = document.querySelector('#outing-card-template').content.firstElementChild.cloneNode(true);
     card.querySelector('h3').textContent = name;
-    card.querySelector('.outing-label').textContent = region;
-    const typeLabel = card.querySelector('.type-label');
-    typeLabel.textContent = category;
-    if (sectionId === 'shopping-list') {
-        typeLabel.className = 'shopping-type-tape';
-        card.querySelector('h3').after(typeLabel);
-        card.dataset.labelCount = card.querySelectorAll('.outing-label').length;
+    const labels = card.querySelector('.outing-labels');
+    labels.replaceChildren(...regions.map(region => {
+        const label = document.createElement('span');
+        label.className = 'outing-label';
+        label.textContent = region;
+        return label;
+    }));
+    const category = form.querySelector('#outing-tape').value.trim();
+    if (category) {
+        const type = document.createElement('span');
+        type.className = 'shopping-type-tape';
+        type.textContent = category;
+        card.querySelector('h3').after(type);
     }
-    card.querySelector('p').textContent = [hours, note].filter(Boolean).join(' · ');
-    card.querySelector('p').hidden = !hours && !note;
-    const mapLink = card.querySelector('.map');
-    mapLink.hidden = !map;
-    if (map) mapLink.href = mapDestination(map);
-    section.querySelector('.outing-cards').prepend(card);
-    const filters = section.querySelector('.outing-region-filter');
-    const buttons = Array.from(filters.querySelectorAll('button'));
-    if (!buttons.some(button => button.textContent.trim() === region)) {
-        const filter = document.createElement('button');
-        filter.type = 'button';
-        filter.textContent = region;
-        filter.setAttribute('aria-pressed', 'false');
-        filter.addEventListener('click', () => filterOutingRegion(sectionId, region, filter));
-        filters.append(filter);
+    card.dataset.labelCount = labels.children.length;
+    card.style.setProperty('--outing-label-width', labels.children.length * 30 + 'px');
+    const body = card.querySelector('p');
+    body.replaceChildren();
+    if (schedule.length) {
+        const hours = document.createElement('span');
+        hours.className = 'outing-custom-hours';
+        hours.textContent = '◷ ' + formatHours(schedule);
+        const weekdays = document.createElement('span');
+        weekdays.className = 'weekday-chips shopping-weekdays';
+        for (const day of [...new Set(schedule.flatMap(group => group.days))]) {
+            const label = document.createElement('span');
+            label.textContent = '週' + day;
+            weekdays.append(label);
+        }
+        body.append(hours, weekdays);
     }
-    document.querySelector('.outing-jump a[href="#' + sectionId + '"] .bookmark-count').textContent = section.querySelectorAll('.outing-card').length;
-    form.reset();
-    form.closest('dialog').close();
-    document.querySelector('#outing-search').value = '';
-    buttons[0].click();
+    const note = form.querySelector('#outing-note').value.trim();
+    if (note) { const text = document.createElement('span'); text.className = 'outing-custom-note'; text.textContent = note; body.append(text); }
+    body.hidden = !schedule.length && !note;
+    if (photo) {
+        const image = document.createElement('img');
+        image.className = 'outing-custom-photo';
+        image.src = photo;
+        image.alt = name;
+        card.querySelector('h3').before(image);
+    }
+    const map = card.querySelector('.map');
+    const links = document.createElement('div');
+    links.className = 'shopping-map-links';
+    readTextFields('outing-address-fields').forEach((address, index) => {
+        const link = map.cloneNode(true);
+        link.href = mapDestination(address);
+        link.textContent = '地圖' + (regions[index] ? '－' + regions[index] : '') + ' ↗';
+        links.append(link);
+    });
+    map.replaceWith(links);
+    section.querySelector(':scope > .outing-cards').prepend(card);
+    const filters = section.querySelector(':scope > .outing-region-filter');
+    for (const region of regions) {
+        if (Array.from(filters.children).some(button => button.textContent.trim() === region)) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = region;
+        button.addEventListener('click', () => filterOutingRegion(sectionId, region, button));
+        filters.append(button);
+    }
+    document.getElementById('outing-search').value = '';
+    filters.querySelector('button').click();
     refreshOutingFilters();
+    await saveCollections();
+    form.closest('dialog').close();
     section.scrollIntoView({block:'start'});
+ } catch {
+    toast('圖片讀取失敗，請重新選擇照片');
+ } finally { submit.disabled = false; }
 });
-
 
 const routePlan = document.querySelector('.route-plan');
 const routeDialog = document.querySelector('#route-dialog');
@@ -750,3 +918,6 @@ routePlan.querySelectorAll('.route-day-date').forEach(button => {
 });
 new ResizeObserver(() => showRouteMap(lastRouteDate)).observe(routeMap);
 showRouteMap(Object.keys(routeSelections).find(day => /^[0-6]$/.test(day) && routeSelections[day]?.length) || '0');
+
+switchContent('records', false);
+restoreCollections();
